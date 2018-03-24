@@ -27,19 +27,24 @@ async function main() {
 
 	let lastUpdate;
 
-	while (1) {
-		const { last, data } = await rp({ url: 'http://35.189.28.203:3000', json: true });
+	while (true) {
+		try {
+			const { last, data } = await rp({ url: 'http://35.189.28.203:3000', json: true });
 
-		console.log(`ping - ${last}`);
+			console.log(`ping - ${last}`);
 
-		if (!init && last !== lastUpdate && data.text) {
-			console.log(`command received - ${data.text}`)
+			if (!init && last !== lastUpdate && data.text) {
+				console.log(`command received - ${data.text}`)
 
-			handleMessage(data.text.toLowerCase().trim());
+				handleMessage(data.text.toLowerCase().trim());
+			}
+
+			init = false;
+			lastUpdate = last;
 		}
-
-		init = false;
-		lastUpdate = last;
+		catch (e) {
+			console.error('Failed in update loop', e);
+		}
 
 		await sleep(1000);
 	}
@@ -88,14 +93,17 @@ function findByTypeWord(dictionary, sentance) {
 
 async function execRemoteCommand(device, button) {
 	try {
-		const { stdout, stderr } = await exec(`irsend SEND_ONCE ${device} ${button}`);
-		console.log({stdout, stderr})
-		await sleep(2000);
+		const tries = device === 'sonysoundbar' ? 5 : 1;
+		for (let i = 0; i < tries; i++) {
+			exec(`irsend SEND_ONCE ${device} ${button}`);
+			console.log('exec run')
+		}
 	}
 	catch (e) {
 		console.log(`exec error: ${e}`);
-		await sleep(2000);
 	}
+	
+	await sleep(2000);
 }
 
 main();
