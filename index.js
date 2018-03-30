@@ -5,7 +5,8 @@ const exec = util.promisify(require('child_process').exec);
 
 const deviceWords = {
 	"sonysoundbar": ["sound bar", "soundbar"],
-	"tv": ["tv", "television"]
+	"tv": ["tv", "television"],
+	"sonysoundbar,tv": ["both"]
 };
 
 const buttonWords = {
@@ -17,6 +18,19 @@ const buttonWords = {
 	"KEY_VOLUMEUP": ["volume up"],
 	"KEY_VOLUMEDOWN": ["volume down"]
 }
+
+const numberWords = {
+	1: ["once", "one time", "one times"],
+	2: ["twice", "two time", "two times"],
+	3: ["three times"],
+	4: ["four times"],
+	5: ["five times"],
+	6: ["six times"],
+	7: ["seven times"],
+	8: ["eight times"],
+	9: ["nine times"]
+}
+
 
 function sleep(i) {
 	return new Promise(r => setTimeout(r, i));
@@ -60,20 +74,33 @@ async function handleMessage(text) {
 }
 
 async function processCommand(text, lastDevice) {
-	const { cmd: device = lastDevice, remainingText } = findByTypeWord(deviceWords, text);
-	console.log(`Got device="${device}", remaining="${remainingText}"`);
+	let device, button, multiplier;
+	
+	({ cmd: device = lastDevice, text } = findByTypeWord(deviceWords, text));
+	console.log(`Got device="${device}", remaining="${text}"`);
 
-	const { cmd: button, remainingText2 } = findByTypeWord(buttonWords, remainingText.trim());
-	console.log(`Got button="${button}", remaining="${remainingText2}"`);
+	({ cmd: button, text } = findByTypeWord(buttonWords, text.trim()));
+	console.log(`Got button="${button}", remaining="${text}"`);
+
+	({ cmd: multiplier, text } = findByTypeWord(numberWords, text.trim()));
+	console.log(`Got multiplier="${multiplier}", remaining="${text}"`);
+	
 
 	if (!device || !button) {
 		console.log('Could not match device and button');
 		return;
 	}
+	
 
-	await execRemoteCommand(device, button);
-
-	return device;
+	if (device && device.split(",").length > 1) {
+		for (const d of device.split(",")) {
+			await execRemoteCommand(d, button, multiplier);
+		}
+	}
+	else {
+		await execRemoteCommand(device, button, multiplier);
+		return device;
+	}
 }
 
 function findByTypeWord(dictionary, sentance) {
@@ -83,27 +110,29 @@ function findByTypeWord(dictionary, sentance) {
 		if (match) {
 			return {
 				cmd,
-				remainingText: sentance.substring(match.length) 
+				text: sentance.substring(match.length) 
 			};
 		}
 	}
 
-	return { remainingText: sentance };
+	return { text: sentance };
 }
 
-async function execRemoteCommand(device, button) {
-	try {
-		const tries = device === 'sonysoundbar' ? 5 : 1;
-		for (let i = 0; i < tries; i++) {
-			exec(`irsend SEND_ONCE ${device} ${button}`);
-			console.log('exec run')
+async function execRemoteCommand(device, button, multiplier = 1) {
+	for (let i = 0; i < multiplier; i++) {
+		try {
+			const tries = device === 'sonysoundbar' ? 5 : 1;
+			for (let i = 0; i < tries; i++) {
+				exec(`irsend SEND_ONCE ${device} ${button}`);
+				console.log('exec run')
+			}
 		}
+		catch (e) {
+			console.log(`exec error: ${e}`);
+		}
+		
+		await sleep(2000);
 	}
-	catch (e) {
-		console.log(`exec error: ${e}`);
-	}
-	
-	await sleep(2000);
 }
 
 main();
